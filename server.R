@@ -94,8 +94,14 @@ server <- function(input, output, session) {
   
   # ── Overview: popularity density curve ────────────────────
   output$ov_pop_hist <- renderPlotly({
-    d    <- ov_data()
-    dens <- density(d$popularity, na.rm = TRUE, from = 0, to = 100)
+    d <- ov_data()
+    
+    req(nrow(d) > 1) 
+    
+    pop_min <- input$ov_pop[1]
+    pop_max <- input$ov_pop[2]
+    
+    dens <- density(d$popularity, na.rm = TRUE, from = pop_min, to = pop_max)
     
     plot_ly(x = dens$x, y = dens$y, type = "scatter", mode = "lines",
             fill = "tozeroy",
@@ -105,7 +111,7 @@ server <- function(input, output, session) {
         paper_bgcolor = "transparent", plot_bgcolor = "transparent",
         font  = list(color = "#EDEDED", family = "DM Sans"),
         xaxis = list(title = "Popularity", color = "#B3B3B3",
-                     gridcolor = "#282828", zeroline = FALSE, range = c(0, 100)),
+                     gridcolor = "#282828", zeroline = FALSE, range = c(pop_min, pop_max)),
         yaxis = list(title = "Density", color = "#B3B3B3",
                      gridcolor = "#282828", zeroline = FALSE),
         margin = list(l = 10, r = 10, t = 10, b = 30),
@@ -143,8 +149,17 @@ server <- function(input, output, session) {
   # ── Overview: audio features radar ────────────────────────
   output$ov_radar <- renderPlotly({
     req(input$ov_radar_genre)
-    means <- df %>%
-      filter(track_genre == input$ov_radar_genre) %>%
+    d <- df %>%
+      filter(
+        track_genre == input$ov_radar_genre,
+        popularity >= input$ov_pop[1],
+        popularity <= input$ov_pop[2]
+      )
+    if (input$ov_explicit != "All") {
+      d <- d %>% filter(explicit == input$ov_explicit)
+    }
+    req(nrow(d) > 0)
+    means <- d %>%
       summarise(across(all_of(audio_features), mean, na.rm = TRUE)) %>%
       pivot_longer(everything())
     
@@ -157,7 +172,7 @@ server <- function(input, output, session) {
             line = list(color = "#1DB954", width = 2)) %>%
       layout(
         paper_bgcolor = "transparent", plot_bgcolor = "transparent",
-        font  = list(color = "#EDEDED", family = "DM Sans", size = 11),
+        font  = list(color = "#EDEDED", family = "DM Sans", size = 14),
         polar = list(
           bgcolor    = "transparent",
           radialaxis = list(visible = TRUE, range = c(0,1),
@@ -165,7 +180,7 @@ server <- function(input, output, session) {
           angularaxis = list(color = "#B3B3B3", gridcolor = "#282828")
         ),
         showlegend = FALSE,
-        margin     = list(l = 40, r = 40, t = 20, b = 20),
+        margin     = list(l = 40, r = 40, t = 25, b = 30),
         hoverlabel = list(bgcolor = "#181818", font = list(color = "#EDEDED"))
       ) %>%
       config(displayModeBar = FALSE)

@@ -5,6 +5,7 @@
 
 library(shiny)
 library(bslib)
+library(bsicons)
 library(dplyr)
 library(ggplot2)
 library(plotly)
@@ -89,11 +90,11 @@ body { background:#0D0D0D; color:#EDEDED; font-family:'DM Sans',sans-serif; }
 /* ── Cards ── */
 .dash-card {
   background:#181818; border:1px solid #282828; border-radius:12px;
-  padding:1rem 1.2rem; margin-bottom:1rem;
+  padding:0.75rem 1rem; margin-bottom:1rem;
 }
 .card-title-bar {
   font-family:'Space Grotesk',sans-serif; font-weight:600;
-  font-size:.95rem; color:#1DB954; margin-bottom:.7rem;
+  font-size:.95rem; color:#1DB954; margin-bottom:.4rem;
   letter-spacing:.04em; text-transform:uppercase;
 }
 
@@ -101,9 +102,9 @@ body { background:#0D0D0D; color:#EDEDED; font-family:'DM Sans',sans-serif; }
 .kpi-row { display:flex; gap:.75rem; flex-wrap:wrap; margin-bottom:1rem; }
 .kpi-tile {
   flex:1; min-width:110px; background:#181818; border:1px solid #282828;
-  border-radius:10px; padding:.75rem 1rem; text-align:center;
+  border-radius:10px; padding:.25rem .5rem; text-align:center;
 }
-.kpi-value { font-size:1.6rem; font-weight:700; color:#1DB954; font-family:'Space Grotesk',sans-serif; }
+.kpi-value { font-size:1.6rem; line-height: 1; font-weight:700; color:#1DB954; font-family:'Space Grotesk',sans-serif; margin-top: 0.2rem;}
 .kpi-label { font-size:.72rem; color:#B3B3B3; text-transform:uppercase; letter-spacing:.06em; }
 
 /* ── Logo ── */
@@ -153,9 +154,7 @@ table.dataTable tbody tr:hover { background:#282828 !important; cursor:pointer; 
 ui <- page_navbar(
   title = div(
     class = "logo-wrap",
-    img(src   = "PP_logo.png",
-        height = "42px",
-        style  = "border-radius:50%; object-fit:cover;"),
+    div(class = "logo-icon", style = "color: #0D0D0D;", bs_icon("headphones")),
     div(
       div(class = "logo-text", "SoundScope"),
       div(class = "logo-sub", "Spotify Analytics")
@@ -182,27 +181,29 @@ ui <- page_navbar(
                      choices = c("All","Explicit","Clean"), selected = "All",
                      inline  = TRUE),
         hr(style = "border-color:#282828"),
-        p(class = "logo-sub", "KPIs update with filters")
+        p(class = "logo-sub", "Adjust filters to explore the music")
       ),
-      uiOutput("kpi_row"),
-      fluidRow(
-        column(6, card_(title = "Top Genres by Track Count",
-                        plotlyOutput("ov_genre_bar", height = "280px"))),
-        column(6, card_(title = "Popularity Distribution",
-                        plotlyOutput("ov_pop_hist", height = "280px")))
-      ),
-      fluidRow(
-        column(6, card_(title = "Danceability vs Energy",
-                        selectInput("ov_color_by", "Colour by",
-                                    choices  = c("track_genre","mode_label",
-                                                 "explicit","popularity_bin"),
-                                    selected = "mode_label"),
-                        plotlyOutput("ov_scatter", height = "280px"))),
-        column(6, card_(title = "Average Audio Features by Genre (Radar)",
-                        selectInput("ov_radar_genre", "Select Genre",
-                                    choices  = all_genres,
-                                    selected = "pop"),
-                        plotlyOutput("ov_radar", height = "280px")))
+      div(
+        uiOutput("kpi_row"),
+        fluidRow(
+          column(6, card_(title = "Top Genres by Track Count",
+                          plotlyOutput("ov_genre_bar", height = "280px"))),
+          column(6, card_(title = "Popularity Distribution",
+                          plotlyOutput("ov_pop_hist", height = "280px")))
+        ),
+        fluidRow(
+          column(6, card_(title = "Danceability vs Energy",
+                          selectInput("ov_color_by", "Colour by",
+                                      choices  = c("track_genre","mode_label",
+                                                   "explicit","popularity_bin"),
+                                      selected = "mode_label"),
+                          plotlyOutput("ov_scatter", height = "280px"))),
+          column(6, card_(title = "Average Audio Features by Genre (Radar)",
+                          selectInput("ov_radar_genre", "Select Genre",
+                                      choices  = all_genres,
+                                      selected = "pop"),
+                          plotlyOutput("ov_radar", height = "280px")))
+        )
       )
     )
   ),
@@ -288,9 +289,7 @@ ui <- page_navbar(
     div(style = "max-width:800px; margin:2rem auto; padding:0 1rem;",
         div(class = "about-box",
             div(style = "display:flex;align-items:center;gap:12px;margin-bottom:1rem;",
-                img(src   = "PP_logo.png",
-                    height = "48px",
-                    style  = "border-radius:50%; object-fit:cover;"),
+                div(class = "logo-icon", style = "color: #0D0D0D;", bs_icon("headphones")),
                 div(
                   h3(style = "margin:0;font-family:'Space Grotesk',sans-serif;", "SoundScope"),
                   p(style = "margin:0;color:#B3B3B3;font-size:.85rem;", "Spotify Track Analytics Dashboard")
