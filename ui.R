@@ -173,7 +173,7 @@ ui <- page_navbar(
         width = 260,
         selectizeInput("ov_genres", "Filter Genres",
                        choices  = all_genres,
-                       selected = top20_genres[1:10],
+                       selected = all_genres[1:10],
                        multiple = TRUE,
                        options  = list(placeholder = "All genres…")),
         sliderInput("ov_pop", "Popularity Range",
@@ -200,7 +200,7 @@ ui <- page_navbar(
                         plotlyOutput("ov_scatter", height = "280px"))),
         column(6, card_(title = "Average Audio Features by Genre (Radar)",
                         selectInput("ov_radar_genre", "Select Genre",
-                                    choices  = top20_genres,
+                                    choices  = all_genres,
                                     selected = "pop"),
                         plotlyOutput("ov_radar", height = "280px")))
       )
@@ -219,7 +219,7 @@ ui <- page_navbar(
                     choices = audio_features, selected = "energy"),
         selectizeInput("dd_genres2", "Genres",
                        choices  = all_genres,
-                       selected = c("pop","hip-hop","rock","jazz","classical"),
+                       selected = all_genres[1:5],
                        multiple = TRUE,
                        options  = list(placeholder = "Pick genres…")),
         sliderInput("dd_tempo", "Tempo (BPM)",
