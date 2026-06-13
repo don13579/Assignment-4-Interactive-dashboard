@@ -7,7 +7,6 @@ library(shiny)
 library(bslib)
 library(bsicons)
 library(dplyr)
-library(ggplot2)
 library(plotly)
 library(DT)
 library(tidyr)
@@ -332,20 +331,35 @@ ui <- page_navbar(
             hr(style = "border-color:#282828"),
             h4("📋 About this Dashboard"),
             p("SoundScope is an interactive analytics dashboard built with R Shiny for exploring
-          the Spotify Tracks dataset (~114 000 songs across 100+ genres). It lets you uncover
-          patterns in audio features, compare genres, and drill into individual tracks."),
+          the Spotify Tracks dataset. It lets you uncover patterns in audio features, compare genres, and drill into individual tracks."),
             h4("📁 Dataset"),
             tags$ul(
-              tags$li("Source: Spotify Tracks Dataset (Kaggle)"),
-              tags$li("~114 000 tracks across 100+ genres"),
-              tags$li("Features: danceability, energy, valence, tempo, acousticness, and more")
+              tags$li(
+                "Source: ", 
+                tags$a(href = "https://www.kaggle.com/datasets/maharshipandya/-spotify-tracks-dataset", 
+                       target = "_blank", 
+                       style = "color: #1DB954; text-decoration: none; border-bottom: 1px dotted #1DB954;", 
+                       "Spotify Tracks Dataset (Kaggle)")
+              ),
+              tags$li("~114,000 tracks across 100+ genres"),
+              tags$li("Extracted via the Spotify Web API")
+            ),
+            
+            h4("📖 Audio Feature Dictionary"),
+            tags$ul(style = "font-size: 0.85rem; line-height: 1.6;",
+                    tags$li(strong(style = "color: #EDEDED;", "Valence:"), " Measures musical positiveness. High valence (1.0) sounds happy/cheerful, low valence (0.0) sounds sad/angry."),
+                    tags$li(strong(style = "color: #EDEDED;", "Energy:"), " Represents intensity and activity. Highly energetic tracks feel fast, loud, and noisy."),
+                    tags$li(strong(style = "color: #EDEDED;", "Danceability:"), " How suitable a track is for dancing, based on tempo, rhythm stability, and beat strength."),
+                    tags$li(strong(style = "color: #EDEDED;", "Acousticness:"), " A confidence measure from 0.0 to 1.0 of whether the track is acoustic."),
+                    tags$li(strong(style = "color: #EDEDED;", "Instrumentalness:"), " Predicts whether a track contains no vocals. (Values above 0.5 suggest instrumental tracks)."),
+                    tags$li(strong(style = "color: #EDEDED;", "Speechiness:"), " Detects the presence of spoken words (e.g., podcasts, pure rap)."),
+                    tags$li(strong(style = "color: #EDEDED;", "Liveness:"), " Detects the presence of an audience. (Values above 0.8 highly suggest a live recording).")
             ),
             h4("🛠 Dashboard Tabs"),
             tags$ul(
               tags$li(strong("Overview:"), " KPIs, genre bar chart, popularity histogram, scatter plot, radar chart"),
               tags$li(strong("Deep Dive:"), " Custom feature scatter, correlation heatmap, violin plots, key distribution"),
-              tags$li(strong("Tracks:"), " Searchable data table with row-click detail panel & audio fingerprint radar"),
-              tags$li(strong("Compare:"), " Side-by-side boxplots, popularity leaderboard, multi-feature heatmap")
+              tags$li(strong("Tracks:"), " Searchable data table with row-click detail panel & audio fingerprint radar")
             ),
             h4("⚡ Interactive Features"),
             div(
@@ -356,12 +370,14 @@ ui <- page_navbar(
               span(class = "feature-badge", "Radar chart"),
               span(class = "feature-badge", "Correlation heatmap"),
               span(class = "feature-badge", "Violin plots"),
-              span(class = "feature-badge", "Lollipop chart")
+              span(class = "feature-badge", "Column filters"),
+              span(class = "feature-badge", "Hover tooltips")
             ),
             hr(style = "border-color:#282828"),
             h4("📦 R Packages"),
-            p(code("shiny"), " · ", code("bslib"), " · ", code("ggplot2"), " · ",
-              code("plotly"), " · ", code("DT"), " · ", code("dplyr"), " · ", code("tidyr")),
+            p(code("shiny"), " · ", code("bslib"), " · ", code("bsicons"), " · ",
+              code("plotly"), " · ", code("DT"), " · ", code("dplyr"), " · ", 
+              code("tidyr"), " · ", code("stringr"), " · ", code("forcats"), " · ", code("scales")),
             hr(style = "border-color:#282828"),
             p(style = "color:#535353; font-size:.78rem;",
               "Dashboard built for Data Visualisation assignment · 2025/2026")
