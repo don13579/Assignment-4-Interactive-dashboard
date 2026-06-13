@@ -21,6 +21,7 @@ df_raw <- read.csv("data/dataset.csv", stringsAsFactors = FALSE)
 df <- df_raw %>%
   rename(idx = 1) %>%
   mutate(
+    artists        = str_replace_all(artists, ";", ", "),
     duration_min   = round(duration_ms / 60000, 2),
     explicit       = ifelse(explicit %in% c("True","TRUE","true",TRUE), "Explicit", "Clean"),
     mode_label     = ifelse(mode == 1, "Major", "Minor"),
@@ -67,6 +68,12 @@ card_ <- function(..., title = NULL, height = NULL) {
 custom_css <- "
 /* ── Base ── */
 body { background:#0D0D0D; color:#EDEDED; font-family:'DM Sans',sans-serif; }
+
+/* ── bslib Main Layout Override ── */
+.bslib-sidebar-layout > .main, .tab-pane {
+  /* Shrinks the massive default gap under the top navbar */
+  padding-top: 0.5rem !important; 
+}
 
 /* ── Sidebar ── */
 .bslib-sidebar-layout > .sidebar {
@@ -131,6 +138,42 @@ table.dataTable tbody tr:hover { background:#282828 !important; cursor:pointer; 
 .dataTables_info, .dataTables_paginate { color:#B3B3B3 !important; }
 .paginate_button { color:#B3B3B3 !important; }
 .paginate_button.current { background:#1DB954 !important; color:#000 !important; border-radius:4px; }
+
+table.dataTable tbody tr td.dtfc-fixed-left,
+table.dataTable thead tr th.dtfc-fixed-left {
+  background-color: #181818 !important;
+  border-right: 1px solid #282828 !important; 
+}
+table.dataTable tbody tr:hover td.dtfc-fixed-left {
+  background-color: #282828 !important; 
+}
+
+.clamp-text {
+  max-width: 200px !important;
+  white-space: normal !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2 !important;
+  -webkit-box-orient: vertical !important;
+}
+
+table.dataTable thead td .selectize-control {
+  min-width: 120px !important;
+}
+
+table.dataTable thead td:nth-last-child(1) div[style*='absolute'],
+table.dataTable thead td:nth-last-child(2) div[style*='absolute'] {
+  left: auto !important;
+  right: 0 !important;
+}
+
+.dataTables_scrollBody thead div[style*='absolute'] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
 
 /* ── About section ── */
 .about-box { background:#121212; border:1px solid #282828; border-radius:10px; padding:1.5rem; }
@@ -228,23 +271,25 @@ ui <- page_navbar(
         hr(style = "border-color:#282828"),
         checkboxInput("dd_show_smooth", "Show trend line", value = TRUE)
       ),
-      fluidRow(
-        column(7, card_(title = "Feature Scatter Explorer",
-                        plotlyOutput("dd_scatter", height = "360px"))),
-        column(5, card_(title = "Feature Correlation Heatmap",
-                        plotlyOutput("dd_heatmap", height = "360px")))
-      ),
-      fluidRow(
-        column(6, card_(title = "Attribute Distribution by Genre",
-                        selectInput("dd_violin_attr", "Attribute",
-                                    choices  = c(audio_features,
-                                                 "tempo","loudness","duration_min","popularity"),
-                                    selected = "tempo"),
-                        plotlyOutput("dd_violin", height = "255px"))),
-        column(6, card_(title = "Key Distribution",
-                        selectInput("dd_key_genre", "Genre",
-                                    choices = all_genres, selected = "pop"),
-                        plotlyOutput("dd_key_bar", height = "270px")))
+      div(
+        fluidRow(
+          column(7, card_(title = textOutput("dd_scatter_title", inline = TRUE),
+                          plotlyOutput("dd_scatter", height = "360px"))),
+          column(5, card_(title = "Feature Correlation Heatmap",
+                          plotlyOutput("dd_heatmap", height = "360px")))
+        ),
+        fluidRow(
+          column(6, card_(title = "Attribute Distribution by Genre",
+                          selectInput("dd_violin_attr", "Attribute",
+                                      choices  = c(audio_features,
+                                                   "tempo","loudness","duration_min","popularity"),
+                                      selected = "energy"),
+                          plotlyOutput("dd_violin", height = "255px"))),
+          column(6, card_(title = "Key Distribution",
+                          selectInput("dd_key_genre", "Genre",
+                                      choices = all_genres, selected = "pop"),
+                          plotlyOutput("dd_key_bar", height = "255px")))
+        )
       )
     )
   ),
@@ -252,33 +297,22 @@ ui <- page_navbar(
   # ── TAB 3: Track Table ────────────────────────────────────
   nav_panel(
     "🎵 Tracks",
-    layout_sidebar(
-      sidebar = sidebar(
-        width = 260,
-        selectizeInput("tbl_genres", "Genres",
-                       choices  = all_genres,
-                       selected = c("pop","hip-hop"),
-                       multiple = TRUE),
-        sliderInput("tbl_pop2", "Popularity",
-                    min = 0, max = 100, value = c(50, 100)),
-        selectInput("tbl_explicit", "Content",
-                    choices = c("All","Explicit","Clean"), selected = "All"),
-        sliderInput("tbl_dur", "Duration (min)",
-                    min = 0, max = 15, value = c(1, 8), step = .5),
-        hr(style = "border-color:#282828"),
-        p(class = "logo-sub", "Click a row to see track details")
+    fluidRow(
+      column(8,style = "width: 70%;",
+             card_(
+               title = div(style = "display: flex; justify-content: space-between; align-items: center;",
+                           span("Track Table"),
+                           span(id = "custom_length_container", 
+                                style = "color: #B3B3B3; text-transform: none; letter-spacing: normal; font-family: 'DM Sans', sans-serif; font-weight: 400; font-size: 0.85rem;")
+               ),
+               DTOutput("track_table")
+             )
       ),
-      fluidRow(
-        column(8,
-               card_(title = "Track Table",
-                     DTOutput("track_table"))
-        ),
-        column(4,
-               card_(title = "Selected Track Details",
-                     uiOutput("track_detail")),
-               card_(title = "Audio Fingerprint",
-                     plotlyOutput("track_radar", height = "280px"))
-        )
+      column(4,style = "width: 30%;",
+             card_(title = "Selected Track Details",
+                   uiOutput("track_detail")),
+             card_(title = "Audio Fingerprint",
+                   plotlyOutput("track_radar", height = "355px"))
       )
     )
   ),

@@ -14,6 +14,7 @@ server <- function(input, output, session) {
   df <- df_raw %>%
     rename(idx = 1) %>%
     mutate(
+      artists        = str_replace_all(artists, ";", ", "),
       duration_min   = round(duration_ms / 60000, 2),
       explicit       = ifelse(explicit %in% c("True","TRUE","true",TRUE), "Explicit", "Clean"),
       mode_label     = ifelse(mode == 1, "Major", "Minor"),
@@ -139,7 +140,7 @@ server <- function(input, output, session) {
                      gridcolor = "#282828", zeroline = FALSE, range = c(0,1)),
         yaxis = list(title = "Energy", color = "#B3B3B3",
                      gridcolor = "#282828", zeroline = FALSE, range = c(0,1)),
-        legend = list(font = list(size = 9), bgcolor = "transparent"),
+        legend = list(font = list(size = 12), bgcolor = "transparent"),
         margin = list(l = 10, r = 10, t = 10, b = 30),
         hoverlabel = list(bgcolor = "#181818", font = list(color = "#EDEDED"))
       ) %>%
@@ -193,7 +194,16 @@ server <- function(input, output, session) {
       d <- d %>% filter(track_genre %in% input$dd_genres2)
     d %>% filter(tempo >= input$dd_tempo[1], tempo <= input$dd_tempo[2])
   })
-  
+  # ── Deep Dive: feature scatter title ────────────────────────
+  output$dd_scatter_title <- renderText({
+    req(input$dd_feature_x, input$dd_feature_y)
+    paste(
+      "Feature exploration:",
+      tools::toTitleCase(input$dd_feature_y), 
+      "vs.", 
+      tools::toTitleCase(input$dd_feature_x)
+    )
+  })
   # ── Deep Dive: feature scatter ────────────────────────────
   output$dd_scatter <- renderPlotly({
     d   <- dd_data() %>% sample_n(min(3000, nrow(.)))
@@ -214,7 +224,7 @@ server <- function(input, output, session) {
                      gridcolor = "#282828", zeroline = FALSE),
         yaxis = list(title = yf, color = "#B3B3B3",
                      gridcolor = "#282828", zeroline = FALSE),
-        legend = list(font = list(size = 9), bgcolor = "transparent"),
+        legend = list(font = list(size = 12), bgcolor = "transparent"),
         margin = list(l = 10, r = 10, t = 10, b = 30),
         hoverlabel = list(bgcolor = "#181818", font = list(color = "#EDEDED"))
       ) %>%
@@ -244,14 +254,15 @@ server <- function(input, output, session) {
             zmin = -1, zmax = 1,
             text = round(cm, 2), hoverinfo = "text",
             colorbar = list(
+              thickness = 15,
               tickfont = list(color = "#B3B3B3"),
-              title    = list(text = "r", font = list(color = "#B3B3B3"))
+              title    = ""
             )) %>%
       layout(
         paper_bgcolor = "transparent", plot_bgcolor = "transparent",
-        font  = list(color = "#B3B3B3", family = "DM Sans", size = 10),
-        xaxis = list(tickangle = -35, color = "#B3B3B3"),
-        yaxis = list(color = "#B3B3B3"),
+        font  = list(color = "#B3B3B3", family = "DM Sans", size = 12),
+        xaxis = list(tickangle = -35, color = "#B3B3B3",tickfont = list(size = 13)),
+        yaxis = list(color = "#B3B3B3",tickfont = list(size = 13)),
         margin = list(l = 90, r = 10, t = 10, b = 80)
       ) %>%
       config(displayModeBar = FALSE)
@@ -273,9 +284,9 @@ server <- function(input, output, session) {
         paper_bgcolor = "transparent", plot_bgcolor = "transparent",
         font  = list(color = "#EDEDED", family = "DM Sans"),
         xaxis = list(title = "", color = "#B3B3B3", tickangle = -35,
-                     gridcolor = "#282828"),
+                     gridcolor = "#282828",tickfont = list(size = 13)),
         yaxis = list(title = attr, color = "#B3B3B3",
-                     gridcolor = "#282828"),
+                     gridcolor = "#282828",tickfont = list(size = 13)),
         showlegend = FALSE,
         margin     = list(l = 10, r = 10, t = 10, b = 80),
         hoverlabel = list(bgcolor = "#181818", font = list(color = "#EDEDED"))
@@ -287,7 +298,13 @@ server <- function(input, output, session) {
   output$dd_key_bar <- renderPlotly({
     req(input$dd_key_genre)
     d <- df %>%
-      filter(track_genre == input$dd_key_genre) %>%
+      filter(
+        track_genre == input$dd_key_genre,
+        tempo >= input$dd_tempo[1],
+        tempo <= input$dd_tempo[2]
+      )
+    req(nrow(d) > 0)
+    d <- d %>%
       count(key_label) %>%
       arrange(key_label)
     
@@ -300,9 +317,11 @@ server <- function(input, output, session) {
         xaxis = list(title = "Key", color = "#B3B3B3",
                      categoryorder = "array",
                      categoryarray = c("C","C#","D","D#","E","F",
-                                       "F#","G","G#","A","A#","B")),
+                                       "F#","G","G#","A","A#","B"),
+                     tickfont = list(size = 13)),
         yaxis = list(title = "Tracks", color = "#B3B3B3",
-                     gridcolor = "#282828"),
+                     gridcolor = "#282828",
+                     tickfont = list(size = 13)),
         margin = list(l = 10, r = 10, t = 10, b = 40),
         hoverlabel = list(bgcolor = "#181818", font = list(color = "#EDEDED"))
       ) %>%
@@ -311,18 +330,13 @@ server <- function(input, output, session) {
   
   # ── Tracks: filtered reactive ─────────────────────────────
   tbl_data <- reactive({
-    d <- df
-    if (length(input$tbl_genres) > 0)
-      d <- d %>% filter(track_genre %in% input$tbl_genres)
-    d <- d %>%
-      filter(popularity   >= input$tbl_pop2[1], popularity   <= input$tbl_pop2[2],
-             duration_min >= input$tbl_dur[1],  duration_min <= input$tbl_dur[2])
-    if (input$tbl_explicit != "All")
-      d <- d %>% filter(explicit == input$tbl_explicit)
-    d %>%
+    df %>%
+      mutate(
+        explicit    = as.factor(explicit),
+        track_genre = as.factor(track_genre)
+      ) %>%
       select(track_name, artists, track_genre, popularity,
-             duration_min, explicit, danceability, energy, valence, tempo) %>%
-      head(2000)
+             duration_min, explicit, danceability, energy, valence, tempo) 
   })
   
   # ── Tracks: data table ─────────────────────────────────────
@@ -333,24 +347,50 @@ server <- function(input, output, session) {
       rownames  = FALSE,
       colnames  = c("Track","Artist","Genre","Popularity","Duration (min)",
                     "Explicit","Danceability","Energy","Valence","Tempo"),
+      extensions = 'FixedColumns',
       options   = list(
-        pageLength = 12, scrollX = TRUE,
-        dom        = "ftip",
-        columnDefs = list(list(className = "dt-center", targets = 3:9))
+        autoWidth  = FALSE,
+        dom        = "rtip",
+        pageLength = 10, scrollX = TRUE,
+        fixedColumns = list(leftColumns = 1),
+        columnDefs = list(
+          list(className = "dt-center", targets = 3:9),
+          list(
+            targets = 0:1,
+            width = "180px",
+            render = JS("function(data, type, row) {
+              if (type === 'display' && data != null) {
+                // Escape quotes so the tooltip doesn't break
+                var safeStr = String(data).replace(/\"/g, '&quot;');
+                // Returns the text inside our clamped div, with a native hover tooltip!
+                return '<div class=\"clamp-text\" title=\"' + safeStr + '\">' + data + '</div>';
+              }
+              return data;
+            }")
+          )
+        ),
+        initComplete = JS(
+          "function(settings, json) {",
+          "  var api = this.api();",
+          "  var lengthContainer = $('#custom_length_container');",
+          "  lengthContainer.html('<label>Show <input type=\"number\" min=\"1\" max=\"500\" value=\"10\" class=\"form-control form-control-sm\" style=\"display: inline-block; width: 60px; background-color: #181818; color: #EDEDED; border: 1px solid #282828; margin: 0 5px;\"> entries</label>');",
+          "  lengthContainer.find('input').on('change keyup', function() {",
+          "    var val = parseInt(this.value, 10);",
+          "    if (val > 0 && val <= 500) {",
+          "      api.page.len(val).draw();",
+          "    }",
+          "  });",
+          "}"
+        )
       ),
       class  = "display compact",
       filter = "top"
     ) %>%
       formatRound(c("danceability","energy","valence"), 3) %>%
-      formatRound("tempo", 1) %>%
-      formatStyle("popularity",
-                  background         = styleColorBar(c(0,100), "#1DB954"),
-                  backgroundSize     = "98% 60%",
-                  backgroundRepeat   = "no-repeat",
-                  backgroundPosition = "center")
+      formatRound("tempo", 1)
   })
   
-  # ── Tracks: selected row → reactive ───────────────────────
+  # ── Tracks: selected row - reactive ───────────────────────
   selected_track <- reactive({
     sel <- input$track_table_rows_selected
     if (is.null(sel) || length(sel) == 0) return(NULL)
@@ -414,6 +454,18 @@ server <- function(input, output, session) {
       label <- full$track_name
     }
     
+    clean_names <- c(
+      "danceability"     = "dance-<br>ability",
+      "energy"           = "energy",
+      "speechiness"      = "spee-<br>chiness",
+      "acousticness"     = "acous-<br>ticness",
+      "instrumentalness" = "instru-<br>mental-<br>ness",
+      "liveness"         = "liveness",
+      "valence"          = "valence"
+    )
+    # Overwrite the 'name' column with our stacked labels
+    means$name <- clean_names[means$name]
+    
     theta_vals <- c(means$name,  means$name[1])
     r_vals     <- c(means$value, means$value[1])
     
@@ -428,10 +480,10 @@ server <- function(input, output, session) {
           bgcolor     = "transparent",
           radialaxis  = list(visible = TRUE, range = c(0,1),
                              color = "#535353", gridcolor = "#282828"),
-          angularaxis = list(color = "#B3B3B3", gridcolor = "#282828")
+          angularaxis = list(color = "#B3B3B3", gridcolor = "#282828", tickfont = list(size = 12))
         ),
         showlegend = FALSE,
-        margin     = list(l = 40, r = 40, t = 20, b = 10),
+        margin     = list(l = 40, r = 40, t = 50, b = 52),
         hoverlabel = list(bgcolor = "#181818", font = list(color = "#EDEDED"))
       ) %>%
       config(displayModeBar = FALSE)
