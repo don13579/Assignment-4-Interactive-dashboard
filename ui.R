@@ -45,9 +45,9 @@ spotify_theme <- bs_theme(
   fg                 = "#EDEDED",
   primary            = "#1DB954",
   secondary          = "#535353",
-  base_font          = font_google("DM Sans"),
-  heading_font       = font_google("Space Grotesk"),
-  code_font          = font_google("JetBrains Mono"),
+  # base_font          = font_google("DM Sans"),
+  # heading_font       = font_google("Space Grotesk"),
+  # code_font          = font_google("JetBrains Mono"),
   "navbar-bg"        = "#121212",
   "card-bg"          = "#181818",
   "card-border-color"= "#282828"
