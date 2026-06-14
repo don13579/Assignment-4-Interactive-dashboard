@@ -159,25 +159,7 @@ table.dataTable thead td:nth-last-child(2) div[style*='absolute'] {
 .irs--shiny .irs-handle { border-color:#1DB954 !important; }
 "
 
-# ── Signal server when Plotly.js is ready ────────────────────
-# The ONLY thing JS needs to do: poll until window.Plotly exists,
-# then tell the Shiny server via a custom message so it can
-# release the plots. No resize calls at all — those crash.
-plotly_resize_fix <- tags$script(HTML("
-  (function () {
-    var attempts = 0;
-    var poller = setInterval(function () {
-      attempts++;
-      if (window.Plotly && window.Plotly.Plots) {
-        clearInterval(poller);
-        if (window.Shiny && Shiny.setInputValue) {
-          Shiny.setInputValue('plotly_js_ready', true);
-        }
-      }
-      if (attempts > 60) clearInterval(poller); // give up after 30s
-    }, 500);
-  })();
-"))
+# (no JS resize needed — see dummy_init fix in server.R)
 
 # ── 4. UI definition ─────────────────────────────────────────
 ui <- page_navbar(
@@ -194,7 +176,9 @@ ui <- page_navbar(
   # ── FIX: inject CSS + the resize script into <head> ─────────
   header = tagList(
     tags$head(tags$style(HTML(custom_css))),
-    plotly_resize_fix
+    # Hidden dummy output — forces the full Plotly bundle to load
+    # before any renderPlotly fires (fixes shinylive partial_bundle bug)
+    tags$div(style = "display:none;", textOutput("dummy_init"))
   ),
   
   # ── TAB 1: Overview ───────────────────────────────────────

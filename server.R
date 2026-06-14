@@ -7,14 +7,13 @@
 
 server <- function(input, output, session) {
   
-  # ── Wait for Plotly.js to load before rendering any plots ─────
-  # In Shinylive, JS polls until window.Plotly exists then sends:
-  #   Shiny.setInputValue('plotly_js_ready', true)
-  # Locally, that JS never runs, so we default to TRUE immediately.
-  plotly_ready <- reactive({
-    val <- input$plotly_js_ready
-    if (is.null(val)) TRUE else isTRUE(val)
-  })
+  # ── Shinylive partial_bundle fix ──────────────────────────────
+  # shinylive auto-applies partial_bundle() during export, which
+  # causes "Plotly is not defined" unless a non-plotly output is
+  # visible on first render (forces the full Plotly bundle to load).
+  # This dummy renderText is that non-plotly output — it's invisible
+  # in the UI (empty string) but its presence fixes the load order.
+  output$dummy_init <- renderText({ "" })
   
   # ── Overview: filtered reactive ───────────────────────────
   # FIX: replaced req(input$ov_pop) with an explicit NULL check.
@@ -67,7 +66,6 @@ server <- function(input, output, session) {
   
   # ── Overview: genre bar chart ──────────────────────────────
   output$ov_genre_bar <- renderPlotly({
-    req(plotly_ready())
     d <- ov_data() %>%
       count(track_genre, sort = TRUE) %>%
       head(15) %>%
@@ -91,7 +89,6 @@ server <- function(input, output, session) {
   
   # ── Overview: popularity density curve ────────────────────
   output$ov_pop_hist <- renderPlotly({
-    req(plotly_ready())
     d <- ov_data()
     req(nrow(d) > 1)
     
@@ -125,10 +122,8 @@ server <- function(input, output, session) {
   
   # ── Overview: danceability vs energy scatter ───────────────
   output$ov_scatter <- renderPlotly({
-    req(plotly_ready())
     d         <- ov_data() %>% sample_n(min(2000, nrow(.)))
     color_col <- input$ov_color_by
-    if (is.null(color_col)) color_col <- "mode_label"
     
     plot_ly(d, x = ~danceability, y = ~energy,
             color     = ~.data[[color_col]],
@@ -152,7 +147,6 @@ server <- function(input, output, session) {
   
   # ── Overview: audio features radar ────────────────────────
   output$ov_radar <- renderPlotly({
-    req(plotly_ready())
     # FIX: selectInput always has a value; the extra req() on
     # input$ov_pop was blocking this plot on every cold load.
     req(input$ov_radar_genre)
@@ -229,7 +223,6 @@ server <- function(input, output, session) {
   
   # ── Deep Dive: feature scatter ────────────────────────────
   output$dd_scatter <- renderPlotly({
-    req(plotly_ready())
     d   <- dd_data() %>% sample_n(min(3000, nrow(.)))
     req(input$dd_feature_x, input$dd_feature_y)
     xf  <- input$dd_feature_x
@@ -269,7 +262,6 @@ server <- function(input, output, session) {
   
   # ── Deep Dive: correlation heatmap ────────────────────────
   output$dd_heatmap <- renderPlotly({
-    req(plotly_ready())
     d  <- dd_data() %>% select(all_of(audio_features))
     cm <- cor(d, use = "pairwise.complete.obs")
     
@@ -295,7 +287,6 @@ server <- function(input, output, session) {
   
   # ── Deep Dive: violin — selectable attribute by genre ──────
   output$dd_violin <- renderPlotly({
-    req(plotly_ready())
     req(input$dd_violin_attr)
     attr <- input$dd_violin_attr
     d    <- dd_data()
@@ -322,7 +313,6 @@ server <- function(input, output, session) {
   
   # ── Deep Dive: key distribution bar ───────────────────────
   output$dd_key_bar <- renderPlotly({
-    req(plotly_ready())
     req(input$dd_key_genre)
     tempo_range <- input$dd_tempo          # avoid collision with 'tempo' column
     if (is.null(tempo_range)) tempo_range <- c(60, 200)
@@ -464,7 +454,6 @@ server <- function(input, output, session) {
   
   # ── Tracks: audio fingerprint radar (linked to row click) ──
   output$track_radar <- renderPlotly({
-    req(plotly_ready())
     t <- selected_track()
     
     if (is.null(t)) {
