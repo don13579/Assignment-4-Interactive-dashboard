@@ -83,20 +83,19 @@ server <- function(input, output, session) {
   output$ov_pop_hist <- renderPlotly({
     d <- ov_data()
     
-    # FIX: return a blank transparent plot instead of aborting with req()
-    # req() would silently kill this output on the first Shinylive flush
-    # (before the slider initialises), leaving the panel blank until the
-    # user moves a filter.  A visible-but-empty chart is much better UX.
+    # Return a blank transparent placeholder instead of aborting with req().
+    # req() silently kills the output on the first Shinylive flush, leaving
+    # the panel blank until the user moves a filter.
     if (nrow(d) <= 1) {
       return(
-        plot_ly() %>%
-          layout(paper_bgcolor = "transparent", plot_bgcolor = "transparent",
-                 font = list(color = "#EDEDED", family = "DM Sans"),
-                 xaxis = list(visible = FALSE), yaxis = list(visible = FALSE))
+        plot_ly() %>% layout(
+          paper_bgcolor = "transparent", plot_bgcolor = "transparent",
+          xaxis = list(visible = FALSE), yaxis = list(visible = FALSE)
+        )
       )
     }
     
-    # FIX: read pop range from the reactive's safe local, not directly
+    # read pop range from the reactive's safe local, not directly
     # from input$ov_pop, which can still be NULL on the first flush.
     pop <- input$ov_pop
     if (is.null(pop)) pop <- c(0, 100)
@@ -128,7 +127,7 @@ server <- function(input, output, session) {
   output$ov_scatter <- renderPlotly({
     d         <- ov_data() %>% sample_n(min(2000, nrow(.)))
     color_col <- input$ov_color_by
-    if (is.null(color_col)) color_col <- "mode_label"   # FIX: safe default while selectInput initialises
+    if (is.null(color_col)) color_col <- "mode_label"  # safe default on cold load
     
     plot_ly(d, x = ~danceability, y = ~energy,
             color     = ~.data[[color_col]],

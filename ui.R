@@ -159,51 +159,47 @@ table.dataTable thead td:nth-last-child(2) div[style*='absolute'] {
 .irs--shiny .irs-handle { border-color:#1DB954 !important; }
 "
 
-# ── FIX: event-driven Plotly resize ─────────────────────────
-# On GitHub Pages, shinylive's WebAssembly runtime can take
-# 5-10 s to boot.  setTimeout-based fixes fire before any
-# chart exists in the DOM and do nothing.
-#
-# Instead we hook three reliable events:
-#  1. shiny:value  — fires every time ANY Shiny output finishes
-#                    rendering; we resize all Plotly divs right
-#                    after, so each chart fixes itself the moment
-#                    it lands in the page.
-#  2. shown.bs.tab — fires when the user switches tabs; charts
-#                    in hidden panels need a resize to appear.
-#  3. Safety-net timeouts (longer ones) in case shiny:value
-#     isn't available in a particular shinylive build.
+# ── Plotly resize + force-redraw for Shinylive ───────────────
+# Root cause: bslib's fillable=TRUE layout computes container
+# heights as 0px on first paint in Shinylive's WASM environment.
+# Plotly.Plots.resize() alone won't help because it re-measures
+# a still-zero container.  We also set fillable=FALSE on the
+# page_navbar, and call Plotly.relayout({autosize:true}) to force
+# a full re-render cycle AFTER the browser has painted the
+# container at its real CSS pixel height.
 plotly_resize_fix <- tags$script(HTML("
   (function () {
+
     function resizePlots() {
-      var plots = document.querySelectorAll('.js-plotly-plot');
-      plots.forEach(function (el) {
-        if (window.Plotly) {
-          try { Plotly.Plots.resize(el); } catch (e) {}
-        }
+      if (!window.Plotly) return;
+      document.querySelectorAll('.js-plotly-plot').forEach(function (el) {
+        try {
+          Plotly.Plots.resize(el);
+          Plotly.relayout(el, { autosize: true });
+        } catch (e) {}
       });
       window.dispatchEvent(new Event('resize'));
     }
 
-    // FIX: wrap shiny:value listener inside shiny:connected so it is
-    // registered only AFTER Shiny's event system is fully mounted.
-    // In Shinylive the WASM runtime boots asynchronously; attaching
-    // shiny:value at script-parse time means the listener is sometimes
-    // added before Shiny's dispatcher exists and never fires on page load.
-    document.addEventListener('shiny:connected', function () {
-      // 1. Resize after every Shiny output update
-      document.addEventListener('shiny:value', function () {
-        requestAnimationFrame(resizePlots);
-      });
+    // After every Shiny output lands, wait one animation frame
+    // (browser paints first), then force-redraw all plots.
+    document.addEventListener('shiny:value', function () {
+      requestAnimationFrame(resizePlots);
     });
 
-    // 2. Resize when switching bslib tabs
-    document.addEventListener('shown.bs.tab', resizePlots);
-
-    // 3. Safety-net timeouts for slow WASM start-up
-    [2000, 4000, 7000, 12000].forEach(function (t) {
-      setTimeout(resizePlots, t);
+    // Re-render when user switches bslib / Bootstrap tabs.
+    document.addEventListener('shown.bs.tab', function () {
+      requestAnimationFrame(resizePlots);
     });
+
+    // Poll every 500 ms for 15 s — catches plots rendered before
+    // event listeners were attached (non-deterministic WASM boot).
+    var polls = 0;
+    var poller = setInterval(function () {
+      resizePlots();
+      if (++polls >= 30) clearInterval(poller);
+    }, 500);
+
   })();
 "))
 
@@ -218,8 +214,8 @@ ui <- page_navbar(
     )
   ),
   theme    = spotify_theme,
-  fillable = TRUE,
-  # ── FIX: inject CSS + the resize script into <head> ─────────
+  fillable = FALSE,
+  # ── inject CSS + the resize script into <head> ─────────
   header = tagList(
     tags$head(tags$style(HTML(custom_css))),
     plotly_resize_fix
