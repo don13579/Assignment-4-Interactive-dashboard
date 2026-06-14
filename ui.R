@@ -119,7 +119,7 @@ body { background:#0D0D0D; color:#EDEDED; font-family:'DM Sans',sans-serif; }
   padding:1rem 1.2rem .5rem;
 }
 .logo-icon {
-  width:36px; height:36px; background:#1DB954; border-radius:50%;
+  width:36px; height:36px; /* background:#1DB954; border-radius:50%; */ /* <--- FIXED: These are commented out --- */
   display:flex; align-items:center; justify-content:center;
   font-size:18px;
 }
