@@ -159,23 +159,44 @@ table.dataTable thead td:nth-last-child(2) div[style*='absolute'] {
 .irs--shiny .irs-handle { border-color:#1DB954 !important; }
 "
 
-# ── FIX: JS resize trigger ───────────────────────────────────
-# Shinylive renders plots before the browser finishes painting
-# the layout, so Plotly measures 0-height containers and draws
-# nothing.  Firing resize events gives Plotly a chance to
-# recalculate its dimensions and re-paint every chart.
+# ── FIX: event-driven Plotly resize ─────────────────────────
+# On GitHub Pages, shinylive's WebAssembly runtime can take
+# 5-10 s to boot.  setTimeout-based fixes fire before any
+# chart exists in the DOM and do nothing.
+#
+# Instead we hook three reliable events:
+#  1. shiny:value  — fires every time ANY Shiny output finishes
+#                    rendering; we resize all Plotly divs right
+#                    after, so each chart fixes itself the moment
+#                    it lands in the page.
+#  2. shown.bs.tab — fires when the user switches tabs; charts
+#                    in hidden panels need a resize to appear.
+#  3. Safety-net timeouts (longer ones) in case shiny:value
+#     isn't available in a particular shinylive build.
 plotly_resize_fix <- tags$script(HTML("
   (function () {
-    function fireResize() {
+    function resizePlots() {
+      var plots = document.querySelectorAll('.js-plotly-plot');
+      plots.forEach(function (el) {
+        if (window.Plotly) {
+          try { Plotly.Plots.resize(el); } catch (e) {}
+        }
+      });
       window.dispatchEvent(new Event('resize'));
     }
-    // Fire at 400 ms, 900 ms, and 2 s to catch slow WASM start-up
-    setTimeout(fireResize, 400);
-    setTimeout(fireResize, 900);
-    setTimeout(fireResize, 2000);
 
-    // Also re-fire whenever the user switches tabs (bslib nav panels)
-    document.addEventListener('shown.bs.tab', fireResize);
+    // 1. Resize after every Shiny output update (the key fix)
+    document.addEventListener('shiny:value', function () {
+      requestAnimationFrame(resizePlots);
+    });
+
+    // 2. Resize when switching bslib tabs
+    document.addEventListener('shown.bs.tab', resizePlots);
+
+    // 3. Safety-net timeouts for slow WASM start-up
+    [2000, 4000, 7000, 12000].forEach(function (t) {
+      setTimeout(resizePlots, t);
+    });
   })();
 "))
 
