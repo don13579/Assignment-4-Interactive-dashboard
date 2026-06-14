@@ -34,15 +34,24 @@ server <- function(input, output, session) {
   
   # ── Overview: filtered reactive ───────────────────────────
   ov_data <- reactive({
-    req(input$ov_pop)
     d <- df
-    if (length(input$ov_genres) > 0)
-      d <- d %>% filter(track_genre %in% input$ov_genres)
-    d <- d %>%
-      filter(popularity >= input$ov_pop[1],
-             popularity <= input$ov_pop[2])
-    if (input$ov_explicit != "All")
-      d <- d %>% filter(explicit == input$ov_explicit)
+    
+    # 1. Safe fallback for genres dropdown
+    genres <- input$ov_genres
+    if (length(genres) > 0) {
+      d <- d %>% filter(track_genre %in% genres)
+    }
+    
+    # 2. Safe fallback for popularity slider (defaults to 0-100 if temporarily NULL)
+    pop_range <- if (is.null(input$ov_pop)) c(0, 100) else input$ov_pop
+    d <- d %>% filter(popularity >= pop_range[1], popularity <= pop_range[2])
+    
+    # 3. Safe fallback for explicit content radio buttons
+    explicit_val <- if (is.null(input$ov_explicit)) "All" else input$ov_explicit
+    if (explicit_val != "All") {
+      d <- d %>% filter(explicit == explicit_val)
+    }
+    
     d
   })
   
