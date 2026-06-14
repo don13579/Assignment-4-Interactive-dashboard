@@ -185,9 +185,16 @@ plotly_resize_fix <- tags$script(HTML("
       window.dispatchEvent(new Event('resize'));
     }
 
-    // 1. Resize after every Shiny output update (the key fix)
-    document.addEventListener('shiny:value', function () {
-      requestAnimationFrame(resizePlots);
+    // FIX: wrap shiny:value listener inside shiny:connected so it is
+    // registered only AFTER Shiny's event system is fully mounted.
+    // In Shinylive the WASM runtime boots asynchronously; attaching
+    // shiny:value at script-parse time means the listener is sometimes
+    // added before Shiny's dispatcher exists and never fires on page load.
+    document.addEventListener('shiny:connected', function () {
+      // 1. Resize after every Shiny output update
+      document.addEventListener('shiny:value', function () {
+        requestAnimationFrame(resizePlots);
+      });
     });
 
     // 2. Resize when switching bslib tabs
