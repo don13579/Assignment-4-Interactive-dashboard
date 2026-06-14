@@ -34,6 +34,7 @@ server <- function(input, output, session) {
   
   # ── Overview: filtered reactive ───────────────────────────
   ov_data <- reactive({
+    req(input$ov_pop)
     d <- df
     if (length(input$ov_genres) > 0)
       d <- d %>% filter(track_genre %in% input$ov_genres)
@@ -149,7 +150,7 @@ server <- function(input, output, session) {
   
   # ── Overview: audio features radar ────────────────────────
   output$ov_radar <- renderPlotly({
-    req(input$ov_radar_genre)
+    req(input$ov_radar_genre, input$ov_pop)
     d <- df %>%
       filter(
         track_genre == input$ov_radar_genre,
@@ -189,6 +190,7 @@ server <- function(input, output, session) {
   
   # ── Deep Dive: filtered reactive ──────────────────────────
   dd_data <- reactive({
+    req(input$dd_tempo)
     d <- df
     if (length(input$dd_genres2) > 0)
       d <- d %>% filter(track_genre %in% input$dd_genres2)
@@ -296,7 +298,7 @@ server <- function(input, output, session) {
   
   # ── Deep Dive: key distribution bar ───────────────────────
   output$dd_key_bar <- renderPlotly({
-    req(input$dd_key_genre)
+    req(input$dd_key_genre, input$dd_tempo)
     d <- df %>%
       filter(
         track_genre == input$dd_key_genre,
