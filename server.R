@@ -82,20 +82,9 @@ server <- function(input, output, session) {
   # ── Overview: popularity density curve ────────────────────
   output$ov_pop_hist <- renderPlotly({
     d <- ov_data()
+    req(nrow(d) > 1)
     
-    # Return a blank transparent placeholder instead of aborting with req().
-    # req() silently kills the output on the first Shinylive flush, leaving
-    # the panel blank until the user moves a filter.
-    if (nrow(d) <= 1) {
-      return(
-        plot_ly() %>% layout(
-          paper_bgcolor = "transparent", plot_bgcolor = "transparent",
-          xaxis = list(visible = FALSE), yaxis = list(visible = FALSE)
-        )
-      )
-    }
-    
-    # read pop range from the reactive's safe local, not directly
+    # FIX: read pop range from the reactive's safe local, not directly
     # from input$ov_pop, which can still be NULL on the first flush.
     pop <- input$ov_pop
     if (is.null(pop)) pop <- c(0, 100)
@@ -127,7 +116,7 @@ server <- function(input, output, session) {
   output$ov_scatter <- renderPlotly({
     d         <- ov_data() %>% sample_n(min(2000, nrow(.)))
     color_col <- input$ov_color_by
-    if (is.null(color_col)) color_col <- "mode_label"  # safe default on cold load
+    if (is.null(color_col)) color_col <- "mode_label"
     
     plot_ly(d, x = ~danceability, y = ~energy,
             color     = ~.data[[color_col]],
@@ -172,7 +161,7 @@ server <- function(input, output, session) {
     req(nrow(d) > 0)
     
     means <- d %>%
-      summarise(across(all_of(audio_features), mean, na.rm = TRUE)) %>%
+      summarise(across(all_of(audio_features), \(x) mean(x, na.rm = TRUE))) %>%
       pivot_longer(everything())
     
     theta_vals <- c(means$name,  means$name[1])
@@ -462,7 +451,7 @@ server <- function(input, output, session) {
     
     if (is.null(t)) {
       means <- df %>%
-        summarise(across(all_of(audio_features), mean, na.rm = TRUE)) %>%
+        summarise(across(all_of(audio_features), \(x) mean(x, na.rm = TRUE))) %>%
         pivot_longer(everything())
       label <- "All Tracks (avg)"
     } else {

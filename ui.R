@@ -159,46 +159,49 @@ table.dataTable thead td:nth-last-child(2) div[style*='absolute'] {
 .irs--shiny .irs-handle { border-color:#1DB954 !important; }
 "
 
-# ── Plotly resize + force-redraw for Shinylive ───────────────
-# Root cause: bslib's fillable=TRUE layout computes container
-# heights as 0px on first paint in Shinylive's WASM environment.
-# Plotly.Plots.resize() alone won't help because it re-measures
-# a still-zero container.  We also set fillable=FALSE on the
-# page_navbar, and call Plotly.relayout({autosize:true}) to force
-# a full re-render cycle AFTER the browser has painted the
-# container at its real CSS pixel height.
+# ── Plotly resize fix for Shinylive ─────────────────────────
+# Root cause (confirmed via browser console):
+#   "Uncaught ReferenceError: Plotly is not defined"
+# The htmlwidget renderValue() fires before plotly-latest.min.js
+# has finished loading in the WASM environment, so the charts
+# render into the DOM but Plotly itself isn't available yet.
+# Fix: wait until window.Plotly exists before doing anything,
+# then call only Plots.resize() — NOT relayout() which crashes
+# on partially-initialised plots (_guiEditing undefined error).
 plotly_resize_fix <- tags$script(HTML("
   (function () {
 
-    function resizePlots() {
-      if (!window.Plotly) return;
+    function safeResize() {
+      // Guard: do nothing until Plotly library is actually loaded
+      if (!window.Plotly || !Plotly.Plots) return;
       document.querySelectorAll('.js-plotly-plot').forEach(function (el) {
+        // Guard: skip plots that haven't completed first render yet
+        // (accessing ._fullLayout confirms the plot object is ready)
         try {
-          Plotly.Plots.resize(el);
-          Plotly.relayout(el, { autosize: true });
+          if (el._fullLayout) {
+            Plotly.Plots.resize(el);
+          }
         } catch (e) {}
       });
       window.dispatchEvent(new Event('resize'));
     }
 
-    // After every Shiny output lands, wait one animation frame
-    // (browser paints first), then force-redraw all plots.
-    document.addEventListener('shiny:value', function () {
-      requestAnimationFrame(resizePlots);
-    });
-
-    // Re-render when user switches bslib / Bootstrap tabs.
-    document.addEventListener('shown.bs.tab', function () {
-      requestAnimationFrame(resizePlots);
-    });
-
-    // Poll every 500 ms for 15 s — catches plots rendered before
-    // event listeners were attached (non-deterministic WASM boot).
+    // Poll every 300 ms until Plotly is defined, then keep
+    // polling to catch plots as they finish rendering one by one.
+    // Stop after 60 polls (18 seconds) to avoid running forever.
     var polls = 0;
     var poller = setInterval(function () {
-      resizePlots();
-      if (++polls >= 30) clearInterval(poller);
-    }, 500);
+      safeResize();
+      if (++polls >= 60) clearInterval(poller);
+    }, 300);
+
+    // Also fire on every Shiny output update and tab switch
+    document.addEventListener('shiny:value', function () {
+      setTimeout(safeResize, 100);
+    });
+    document.addEventListener('shown.bs.tab', function () {
+      setTimeout(safeResize, 100);
+    });
 
   })();
 "))
@@ -214,8 +217,8 @@ ui <- page_navbar(
     )
   ),
   theme    = spotify_theme,
-  fillable = FALSE,
-  # ── inject CSS + the resize script into <head> ─────────
+  fillable = TRUE,
+  # ── FIX: inject CSS + the resize script into <head> ─────────
   header = tagList(
     tags$head(tags$style(HTML(custom_css))),
     plotly_resize_fix
