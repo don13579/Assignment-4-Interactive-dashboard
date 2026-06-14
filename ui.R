@@ -196,7 +196,7 @@ table.dataTable thead td:nth-last-child(2) div[style*='absolute'] {
 ui <- page_navbar(
   title = div(
     class = "logo-wrap",
-    div(class = "logo-icon", style = "color: #0D0D0D;", bs_icon("headphones")),
+    div(class = "logo-icon", style = "color: #0D0D0D;", img(src = "Music_logo.png", style = "width: 100%; height: 100%; object-fit: cover;")),
     div(
       div(class = "logo-text", "SoundScope"),
       div(class = "logo-sub", "Spotify Analytics")
@@ -322,7 +322,7 @@ ui <- page_navbar(
     div(style = "max-width:800px; margin:2rem auto; padding:0 1rem;",
         div(class = "about-box",
             div(style = "display:flex;align-items:center;gap:12px;margin-bottom:1rem;",
-                div(class = "logo-icon", style = "color: #0D0D0D;", bs_icon("headphones")),
+                div(class = "logo-icon", style = "color: #0D0D0D;", img(src = "Music_logo.png", style = "width: 100%; height: 100%; object-fit: cover;")),
                 div(
                   h3(style = "margin:0;font-family:'Space Grotesk',sans-serif;", "SoundScope"),
                   p(style = "margin:0;color:#B3B3B3;font-size:.85rem;", "Spotify Track Analytics Dashboard")
