@@ -159,50 +159,26 @@ table.dataTable thead td:nth-last-child(2) div[style*='absolute'] {
 .irs--shiny .irs-handle { border-color:#1DB954 !important; }
 "
 
-# ── Plotly resize fix for Shinylive ─────────────────────────
-# Root cause (confirmed via browser console):
-#   "Uncaught ReferenceError: Plotly is not defined"
-# The htmlwidget renderValue() fires before plotly-latest.min.js
-# has finished loading in the WASM environment, so the charts
-# render into the DOM but Plotly itself isn't available yet.
-# Fix: wait until window.Plotly exists before doing anything,
-# then call only Plots.resize() — NOT relayout() which crashes
-# on partially-initialised plots (_guiEditing undefined error).
+# ── Tab-switch resize for Shinylive ─────────────────────────
+# Note: we no longer try to call Plotly.resize() on page load.
+# The server-side plotly_ready() reactive (2 s delay) ensures
+# Plotly.js is loaded before any widget HTML is sent to the
+# browser, so the "Plotly is not defined" errors are gone.
+# We only need to handle tab switches, where hidden charts need
+# a resize signal when they become visible.
 plotly_resize_fix <- tags$script(HTML("
   (function () {
-
     function safeResize() {
-      // Guard: do nothing until Plotly library is actually loaded
       if (!window.Plotly || !Plotly.Plots) return;
       document.querySelectorAll('.js-plotly-plot').forEach(function (el) {
-        // Guard: skip plots that haven't completed first render yet
-        // (accessing ._fullLayout confirms the plot object is ready)
         try {
-          if (el._fullLayout) {
-            Plotly.Plots.resize(el);
-          }
-        } catch (e) {}
+          if (el._fullLayout) Plotly.Plots.resize(el);
+        } catch(e) {}
       });
-      window.dispatchEvent(new Event('resize'));
     }
-
-    // Poll every 300 ms until Plotly is defined, then keep
-    // polling to catch plots as they finish rendering one by one.
-    // Stop after 60 polls (18 seconds) to avoid running forever.
-    var polls = 0;
-    var poller = setInterval(function () {
-      safeResize();
-      if (++polls >= 60) clearInterval(poller);
-    }, 300);
-
-    // Also fire on every Shiny output update and tab switch
-    document.addEventListener('shiny:value', function () {
-      setTimeout(safeResize, 100);
+    document.addEventListener('shown.bs.tab', function() {
+      setTimeout(safeResize, 150);
     });
-    document.addEventListener('shown.bs.tab', function () {
-      setTimeout(safeResize, 100);
-    });
-
   })();
 "))
 
