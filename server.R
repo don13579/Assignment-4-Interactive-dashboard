@@ -7,17 +7,13 @@
 
 server <- function(input, output, session) {
   
-  # ── Shinylive fix: delay all plots until Plotly.js is loaded ──
-  # In Shinylive, plotly-latest.min.js loads asynchronously.
-  # renderPlotly() fires before window.Plotly exists, causing
-  # "Plotly is not defined" errors and blank charts on page load.
-  # We use a reactive flag that becomes TRUE after a 2-second
-  # delay (enough for WASM + Plotly to finish loading), so all
-  # plots wait before sending their widget to the browser.
-  plotly_ready <- reactiveVal(FALSE)
-  observe({
-    invalidateLater(2000, session)
-    plotly_ready(TRUE)
+  # ── Wait for Plotly.js to load before rendering any plots ─────
+  # In Shinylive, JS polls until window.Plotly exists then sends:
+  #   Shiny.setInputValue('plotly_js_ready', true)
+  # Locally, that JS never runs, so we default to TRUE immediately.
+  plotly_ready <- reactive({
+    val <- input$plotly_js_ready
+    if (is.null(val)) TRUE else isTRUE(val)
   })
   
   # ── Overview: filtered reactive ───────────────────────────

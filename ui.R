@@ -159,26 +159,23 @@ table.dataTable thead td:nth-last-child(2) div[style*='absolute'] {
 .irs--shiny .irs-handle { border-color:#1DB954 !important; }
 "
 
-# ── Tab-switch resize for Shinylive ─────────────────────────
-# Note: we no longer try to call Plotly.resize() on page load.
-# The server-side plotly_ready() reactive (2 s delay) ensures
-# Plotly.js is loaded before any widget HTML is sent to the
-# browser, so the "Plotly is not defined" errors are gone.
-# We only need to handle tab switches, where hidden charts need
-# a resize signal when they become visible.
+# ── Signal server when Plotly.js is ready ────────────────────
+# The ONLY thing JS needs to do: poll until window.Plotly exists,
+# then tell the Shiny server via a custom message so it can
+# release the plots. No resize calls at all — those crash.
 plotly_resize_fix <- tags$script(HTML("
   (function () {
-    function safeResize() {
-      if (!window.Plotly || !Plotly.Plots) return;
-      document.querySelectorAll('.js-plotly-plot').forEach(function (el) {
-        try {
-          if (el._fullLayout) Plotly.Plots.resize(el);
-        } catch(e) {}
-      });
-    }
-    document.addEventListener('shown.bs.tab', function() {
-      setTimeout(safeResize, 150);
-    });
+    var attempts = 0;
+    var poller = setInterval(function () {
+      attempts++;
+      if (window.Plotly && window.Plotly.Plots) {
+        clearInterval(poller);
+        if (window.Shiny && Shiny.setInputValue) {
+          Shiny.setInputValue('plotly_js_ready', true);
+        }
+      }
+      if (attempts > 60) clearInterval(poller); // give up after 30s
+    }, 500);
   })();
 "))
 
