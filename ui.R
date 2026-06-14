@@ -1,42 +1,9 @@
 # ============================================================
 #  🎵  SOUNDSCOPE — Spotify Analytics Dashboard
 #  ui.R
+#  NOTE: libraries, df, all_genres, top20_genres, audio_features
+#        are all defined in global.R — do NOT redefine here.
 # ============================================================
-
-library(shiny)
-library(bslib)
-library(bsicons)
-library(dplyr)
-library(plotly)
-library(DT)
-library(tidyr)
-library(scales)
-library(forcats)
-library(stringr)
-
-# ── 0. Load & clean data ────────────────────────────────────
-df_raw <- read.csv("data/dataset.csv", stringsAsFactors = FALSE)
-
-df <- df_raw %>%
-  rename(idx = 1) %>%
-  mutate(
-    artists        = str_replace_all(artists, ";", ", "),
-    duration_min   = round(duration_ms / 60000, 2),
-    explicit       = ifelse(explicit %in% c("True","TRUE","true",TRUE), "Explicit", "Clean"),
-    mode_label     = ifelse(mode == 1, "Major", "Minor"),
-    key_label      = factor(key, levels = 0:11,
-                            labels = c("C","C#","D","D#","E","F",
-                                       "F#","G","G#","A","A#","B")),
-    popularity_bin = cut(popularity, breaks = c(-1,20,40,60,80,100),
-                         labels = c("0-20","21-40","41-60","61-80","81-100"))
-  ) %>%
-  filter(!is.na(track_genre), track_genre != "4", track_genre != "")
-
-# Pre-computed lookups (shared with server.R via global scope)
-all_genres     <- sort(unique(df$track_genre))
-top20_genres   <- df %>% count(track_genre, sort = TRUE) %>% head(20) %>% pull(track_genre)
-audio_features <- c("danceability","energy","speechiness",
-                    "acousticness","instrumentalness","liveness","valence")
 
 # ── 1. Theme ────────────────────────────────────────────────
 spotify_theme <- bs_theme(
@@ -119,7 +86,7 @@ body { background:#0D0D0D; color:#EDEDED; font-family:'DM Sans',sans-serif; }
   padding:1rem 1.2rem .5rem;
 }
 .logo-icon {
-  width:36px; height:36px; /* background:#1DB954; border-radius:50%; */ /* <--- FIXED: These are commented out --- */
+  width:36px; height:36px;
   display:flex; align-items:center; justify-content:center;
   font-size:18px;
 }
@@ -192,6 +159,26 @@ table.dataTable thead td:nth-last-child(2) div[style*='absolute'] {
 .irs--shiny .irs-handle { border-color:#1DB954 !important; }
 "
 
+# ── FIX: JS resize trigger ───────────────────────────────────
+# Shinylive renders plots before the browser finishes painting
+# the layout, so Plotly measures 0-height containers and draws
+# nothing.  Firing resize events gives Plotly a chance to
+# recalculate its dimensions and re-paint every chart.
+plotly_resize_fix <- tags$script(HTML("
+  (function () {
+    function fireResize() {
+      window.dispatchEvent(new Event('resize'));
+    }
+    // Fire at 400 ms, 900 ms, and 2 s to catch slow WASM start-up
+    setTimeout(fireResize, 400);
+    setTimeout(fireResize, 900);
+    setTimeout(fireResize, 2000);
+
+    // Also re-fire whenever the user switches tabs (bslib nav panels)
+    document.addEventListener('shown.bs.tab', fireResize);
+  })();
+"))
+
 # ── 4. UI definition ─────────────────────────────────────────
 ui <- page_navbar(
   title = div(
@@ -204,7 +191,11 @@ ui <- page_navbar(
   ),
   theme    = spotify_theme,
   fillable = TRUE,
-  header   = tags$head(tags$style(HTML(custom_css))),
+  # ── FIX: inject CSS + the resize script into <head> ─────────
+  header = tagList(
+    tags$head(tags$style(HTML(custom_css))),
+    plotly_resize_fix
+  ),
   
   # ── TAB 1: Overview ───────────────────────────────────────
   nav_panel(
@@ -212,11 +203,15 @@ ui <- page_navbar(
     layout_sidebar(
       sidebar = sidebar(
         width = 260,
+        # ── FIX: server = FALSE prevents selectize.js from
+        #    waiting for a server response that never comes in
+        #    shinylive, which left input$ov_genres NULL on load.
         selectizeInput("ov_genres", "Filter Genres",
                        choices  = all_genres,
                        selected = all_genres[1:10],
                        multiple = TRUE,
-                       options  = list(placeholder = "All genres…")),
+                       options  = list(placeholder = "All genres…",
+                                       plugins     = list("remove_button"))),
         sliderInput("ov_pop", "Popularity Range",
                     min = 0, max = 100, value = c(0,100), step = 1),
         radioButtons("ov_explicit", "Content",
@@ -264,7 +259,8 @@ ui <- page_navbar(
                        choices  = all_genres,
                        selected = all_genres[1:5],
                        multiple = TRUE,
-                       options  = list(placeholder = "Pick genres…")),
+                       options  = list(placeholder  = "Pick genres…",
+                                       plugins      = list("remove_button"))),
         sliderInput("dd_tempo", "Tempo (BPM)",
                     min = 0, max = 250, value = c(60, 200), step = 5),
         hr(style = "border-color:#282828"),
@@ -316,7 +312,7 @@ ui <- page_navbar(
     )
   ),
   
-  # ── TAB 5: About ─────────────────────────────────────────
+  # ── TAB 4: About ─────────────────────────────────────────
   nav_panel(
     "ℹ About",
     div(style = "max-width:800px; margin:2rem auto; padding:0 1rem;",
@@ -344,7 +340,6 @@ ui <- page_navbar(
               tags$li("~114,000 tracks across 100+ genres"),
               tags$li("Extracted via the Spotify Web API")
             ),
-            
             h4("📖 Audio Feature Dictionary"),
             tags$ul(style = "font-size: 0.85rem; line-height: 1.6;",
                     tags$li(strong(style = "color: #EDEDED;", "Valence:"), " Measures musical positiveness. High valence (1.0) sounds happy/cheerful, low valence (0.0) sounds sad/angry."),

@@ -1,56 +1,32 @@
 # ============================================================
 #  🎵  SOUNDSCOPE — Spotify Analytics Dashboard
 #  server.R
-# ============================================================
-# NOTE: df, all_genres, top20_genres, audio_features, and
-#       card_() are all defined in ui.R and shared via the
-#       global environment when Shiny loads both files.
+#  NOTE: df, all_genres, top20_genres, audio_features, and
+#        card_() are all defined in global.R.
 # ============================================================
 
 server <- function(input, output, session) {
-  # ── 0. Load & clean data ────────────────────────────────────
-  df_raw <- read.csv("data/dataset.csv", stringsAsFactors = FALSE)
-  
-  df <- df_raw %>%
-    rename(idx = 1) %>%
-    mutate(
-      artists        = str_replace_all(artists, ";", ", "),
-      duration_min   = round(duration_ms / 60000, 2),
-      explicit       = ifelse(explicit %in% c("True","TRUE","true",TRUE), "Explicit", "Clean"),
-      mode_label     = ifelse(mode == 1, "Major", "Minor"),
-      key_label      = factor(key, levels = 0:11,
-                              labels = c("C","C#","D","D#","E","F",
-                                         "F#","G","G#","A","A#","B")),
-      popularity_bin = cut(popularity, breaks = c(-1,20,40,60,80,100),
-                           labels = c("0-20","21-40","41-60","61-80","81-100"))
-    ) %>%
-    filter(!is.na(track_genre), track_genre != "4", track_genre != "")
-  
-  # Pre-computed lookups (shared with server.R via global scope)
-  all_genres     <- sort(unique(df$track_genre))
-  top20_genres   <- df %>% count(track_genre, sort = TRUE) %>% head(20) %>% pull(track_genre)
-  audio_features <- c("danceability","energy","speechiness",
-                      "acousticness","instrumentalness","liveness","valence")
   
   # ── Overview: filtered reactive ───────────────────────────
+  # FIX: replaced req(input$ov_pop) with an explicit NULL check.
+  # In shinylive the slider's initial value arrives slightly
+  # after the first reactive flush, causing req() to silently
+  # abort every output that calls ov_data() on page load.
   ov_data <- reactive({
+    pop <- input$ov_pop
+    if (is.null(pop)) pop <- c(0, 100)   # safe default while slider initialises
+    
     d <- df
     
-    # 1. Safe fallback for genres dropdown
     genres <- input$ov_genres
-    if (length(genres) > 0) {
+    if (!is.null(genres) && length(genres) > 0)
       d <- d %>% filter(track_genre %in% genres)
-    }
     
-    # 2. Safe fallback for popularity slider (defaults to 0-100 if temporarily NULL)
-    pop_range <- if (is.null(input$ov_pop)) c(0, 100) else input$ov_pop
-    d <- d %>% filter(popularity >= pop_range[1], popularity <= pop_range[2])
+    d <- d %>% filter(popularity >= pop[1], popularity <= pop[2])
     
-    # 3. Safe fallback for explicit content radio buttons
-    explicit_val <- if (is.null(input$ov_explicit)) "All" else input$ov_explicit
-    if (explicit_val != "All") {
-      d <- d %>% filter(explicit == explicit_val)
-    }
+    explicit_filter <- input$ov_explicit
+    if (!is.null(explicit_filter) && explicit_filter != "All")
+      d <- d %>% filter(explicit == explicit_filter)
     
     d
   })
@@ -106,11 +82,14 @@ server <- function(input, output, session) {
   # ── Overview: popularity density curve ────────────────────
   output$ov_pop_hist <- renderPlotly({
     d <- ov_data()
+    req(nrow(d) > 1)
     
-    req(nrow(d) > 1) 
-    
-    pop_min <- input$ov_pop[1]
-    pop_max <- input$ov_pop[2]
+    # FIX: read pop range from the reactive's safe local, not directly
+    # from input$ov_pop, which can still be NULL on the first flush.
+    pop <- input$ov_pop
+    if (is.null(pop)) pop <- c(0, 100)
+    pop_min <- pop[1]
+    pop_max <- pop[2]
     
     dens <- density(d$popularity, na.rm = TRUE, from = pop_min, to = pop_max)
     
@@ -122,7 +101,8 @@ server <- function(input, output, session) {
         paper_bgcolor = "transparent", plot_bgcolor = "transparent",
         font  = list(color = "#EDEDED", family = "DM Sans"),
         xaxis = list(title = "Popularity", color = "#B3B3B3",
-                     gridcolor = "#282828", zeroline = FALSE, range = c(pop_min, pop_max)),
+                     gridcolor = "#282828", zeroline = FALSE,
+                     range = c(pop_min, pop_max)),
         yaxis = list(title = "Density", color = "#B3B3B3",
                      gridcolor = "#282828", zeroline = FALSE),
         margin = list(l = 10, r = 10, t = 10, b = 30),
@@ -159,17 +139,26 @@ server <- function(input, output, session) {
   
   # ── Overview: audio features radar ────────────────────────
   output$ov_radar <- renderPlotly({
-    req(input$ov_radar_genre, input$ov_pop)
+    # FIX: selectInput always has a value; the extra req() on
+    # input$ov_pop was blocking this plot on every cold load.
+    req(input$ov_radar_genre)
+    
+    pop <- input$ov_pop
+    if (is.null(pop)) pop <- c(0, 100)
+    
     d <- df %>%
       filter(
         track_genre == input$ov_radar_genre,
-        popularity >= input$ov_pop[1],
-        popularity <= input$ov_pop[2]
+        popularity >= pop[1],
+        popularity <= pop[2]
       )
-    if (input$ov_explicit != "All") {
-      d <- d %>% filter(explicit == input$ov_explicit)
-    }
+    
+    explicit_filter <- input$ov_explicit
+    if (!is.null(explicit_filter) && explicit_filter != "All")
+      d <- d %>% filter(explicit == explicit_filter)
+    
     req(nrow(d) > 0)
+    
     means <- d %>%
       summarise(across(all_of(audio_features), mean, na.rm = TRUE)) %>%
       pivot_longer(everything())
@@ -199,22 +188,31 @@ server <- function(input, output, session) {
   
   # ── Deep Dive: filtered reactive ──────────────────────────
   dd_data <- reactive({
-    req(input$dd_tempo)
+    # FIX: use 'tempo_range' — NOT 'tempo', which is a column name in df.
+    # Inside dplyr::filter(), data masking resolves bare 'tempo' as the
+    # column, so filter(tempo >= tempo[1]) would compare the column against
+    # its own first row value, producing 0 rows every time.
+    tempo_range <- input$dd_tempo
+    if (is.null(tempo_range)) tempo_range <- c(60, 200)
+    
     d <- df
-    if (length(input$dd_genres2) > 0)
-      d <- d %>% filter(track_genre %in% input$dd_genres2)
-    d %>% filter(tempo >= input$dd_tempo[1], tempo <= input$dd_tempo[2])
+    genres2 <- input$dd_genres2
+    if (!is.null(genres2) && length(genres2) > 0)
+      d <- d %>% filter(track_genre %in% genres2)
+    d %>% filter(tempo >= tempo_range[1], tempo <= tempo_range[2])
   })
+  
   # ── Deep Dive: feature scatter title ────────────────────────
   output$dd_scatter_title <- renderText({
     req(input$dd_feature_x, input$dd_feature_y)
     paste(
       "Feature exploration:",
-      tools::toTitleCase(input$dd_feature_y), 
-      "vs.", 
+      tools::toTitleCase(input$dd_feature_y),
+      "vs.",
       tools::toTitleCase(input$dd_feature_x)
     )
   })
+  
   # ── Deep Dive: feature scatter ────────────────────────────
   output$dd_scatter <- renderPlotly({
     d   <- dd_data() %>% sample_n(min(3000, nrow(.)))
@@ -272,8 +270,8 @@ server <- function(input, output, session) {
       layout(
         paper_bgcolor = "transparent", plot_bgcolor = "transparent",
         font  = list(color = "#B3B3B3", family = "DM Sans", size = 12),
-        xaxis = list(tickangle = -35, color = "#B3B3B3",tickfont = list(size = 13)),
-        yaxis = list(color = "#B3B3B3",tickfont = list(size = 13)),
+        xaxis = list(tickangle = -35, color = "#B3B3B3", tickfont = list(size = 13)),
+        yaxis = list(color = "#B3B3B3", tickfont = list(size = 13)),
         margin = list(l = 90, r = 10, t = 10, b = 80)
       ) %>%
       config(displayModeBar = FALSE)
@@ -295,9 +293,9 @@ server <- function(input, output, session) {
         paper_bgcolor = "transparent", plot_bgcolor = "transparent",
         font  = list(color = "#EDEDED", family = "DM Sans"),
         xaxis = list(title = "", color = "#B3B3B3", tickangle = -35,
-                     gridcolor = "#282828",tickfont = list(size = 13)),
+                     gridcolor = "#282828", tickfont = list(size = 13)),
         yaxis = list(title = attr, color = "#B3B3B3",
-                     gridcolor = "#282828",tickfont = list(size = 13)),
+                     gridcolor = "#282828", tickfont = list(size = 13)),
         showlegend = FALSE,
         margin     = list(l = 10, r = 10, t = 10, b = 80),
         hoverlabel = list(bgcolor = "#181818", font = list(color = "#EDEDED"))
@@ -307,12 +305,15 @@ server <- function(input, output, session) {
   
   # ── Deep Dive: key distribution bar ───────────────────────
   output$dd_key_bar <- renderPlotly({
-    req(input$dd_key_genre, input$dd_tempo)
+    req(input$dd_key_genre)
+    tempo_range <- input$dd_tempo          # avoid collision with 'tempo' column
+    if (is.null(tempo_range)) tempo_range <- c(60, 200)
+    
     d <- df %>%
       filter(
         track_genre == input$dd_key_genre,
-        tempo >= input$dd_tempo[1],
-        tempo <= input$dd_tempo[2]
+        tempo >= tempo_range[1],
+        tempo <= tempo_range[2]
       )
     req(nrow(d) > 0)
     d <- d %>%
@@ -331,8 +332,7 @@ server <- function(input, output, session) {
                                        "F#","G","G#","A","A#","B"),
                      tickfont = list(size = 13)),
         yaxis = list(title = "Tracks", color = "#B3B3B3",
-                     gridcolor = "#282828",
-                     tickfont = list(size = 13)),
+                     gridcolor = "#282828", tickfont = list(size = 13)),
         margin = list(l = 10, r = 10, t = 10, b = 40),
         hoverlabel = list(bgcolor = "#181818", font = list(color = "#EDEDED"))
       ) %>%
@@ -347,7 +347,7 @@ server <- function(input, output, session) {
         track_genre = as.factor(track_genre)
       ) %>%
       select(track_name, artists, track_genre, popularity,
-             duration_min, explicit, danceability, energy, valence, tempo) 
+             duration_min, explicit, danceability, energy, valence, tempo)
   })
   
   # ── Tracks: data table ─────────────────────────────────────
@@ -371,9 +371,7 @@ server <- function(input, output, session) {
             width = "180px",
             render = JS("function(data, type, row) {
               if (type === 'display' && data != null) {
-                // Escape quotes so the tooltip doesn't break
                 var safeStr = String(data).replace(/\"/g, '&quot;');
-                // Returns the text inside our clamped div, with a native hover tooltip!
                 return '<div class=\"clamp-text\" title=\"' + safeStr + '\">' + data + '</div>';
               }
               return data;
@@ -474,7 +472,6 @@ server <- function(input, output, session) {
       "liveness"         = "liveness",
       "valence"          = "valence"
     )
-    # Overwrite the 'name' column with our stacked labels
     means$name <- clean_names[means$name]
     
     theta_vals <- c(means$name,  means$name[1])
@@ -491,7 +488,8 @@ server <- function(input, output, session) {
           bgcolor     = "transparent",
           radialaxis  = list(visible = TRUE, range = c(0,1),
                              color = "#535353", gridcolor = "#282828"),
-          angularaxis = list(color = "#B3B3B3", gridcolor = "#282828", tickfont = list(size = 12))
+          angularaxis = list(color = "#B3B3B3", gridcolor = "#282828",
+                             tickfont = list(size = 12))
         ),
         showlegend = FALSE,
         margin     = list(l = 40, r = 40, t = 50, b = 52),
@@ -500,5 +498,4 @@ server <- function(input, output, session) {
       config(displayModeBar = FALSE)
   })
   
- 
 }
